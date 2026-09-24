@@ -1,0 +1,354 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Self-contained VPC-first Amazon OpenSearch Service learning environment.
+  It creates a private single-node domain and an SSM-only EC2 event generator.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: playground-os-vpc
+    AllowedPattern: '^[a-z][a-z0-9-]{2,27}$'
+    ConstraintDescription: Use 3-28 lowercase letters, digits, and hyphens, starting with a letter.
+  EngineVersion:
+    Type: String
+    Default: OpenSearch_2.19
+  InstanceType:
+    Type: String
+    Default: t3.small.search
+    AllowedValues:
+      - t3.small.search
+  VolumeSizeGiB:
+    Type: Number
+    Default: 10
+    MinValue: 10
+    MaxValue: 100
+  VpcCidr:
+    Type: String
+    Default: 10.42.0.0/16
+  PublicSubnetCidr:
+    Type: String
+    Default: 10.42.0.0/24
+  PrivateOpenSearchSubnetCidr:
+    Type: String
+    Default: 10.42.1.0/24
+  ProducerInstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+  GeneratorRepositoryUrl:
+    Type: String
+    Default: https://github.com/auke-n/playground-opensearch.git
+  GeneratorRevision:
+    Type: String
+    Default: main
+
+Resources:
+  DemoVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${DomainName}-vpc'
+        - Key: Project
+          Value: playground-opensearch
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${DomainName}-igw'
+        - Key: Project
+          Value: playground-opensearch
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref DemoVpc
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnetCidr
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref DemoVpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${DomainName}-public'
+        - Key: Project
+          Value: playground-opensearch
+
+  PrivateOpenSearchSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PrivateOpenSearchSubnetCidr
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref DemoVpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${DomainName}-opensearch-private'
+        - Key: Project
+          Value: playground-opensearch
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DemoVpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${DomainName}-public-rt'
+        - Key: Project
+          Value: playground-opensearch
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  DomainAdminCredentials:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Internal master-user credentials for the private OpenSearch learning domain.
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\'
+      Tags:
+        - Key: Project
+          Value: playground-opensearch
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  GeneratorSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: No-inbound security group for the SSM-only event generator.
+      VpcId: !Ref DemoVpc
+      SecurityGroupEgress:
+        - Description: HTTPS for package repositories, GitHub, SSM, Secrets Manager, and OpenSearch.
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${DomainName}-generator-sg'
+        - Key: Project
+          Value: playground-opensearch
+
+  OpenSearchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permit HTTPS only from the demo generator and SSM dashboard proxy.
+      VpcId: !Ref DemoVpc
+      SecurityGroupIngress:
+        - Description: HTTPS from generator EC2.
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref GeneratorSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${DomainName}-domain-sg'
+        - Key: Project
+          Value: playground-opensearch
+
+  ManagedOpenSearchDomain:
+    Type: AWS::OpenSearchService::Domain
+    Properties:
+      DomainName: !Ref DomainName
+      EngineVersion: !Ref EngineVersion
+      ClusterConfig:
+        DedicatedMasterEnabled: false
+        InstanceCount: 1
+        InstanceType: !Ref InstanceType
+        ZoneAwarenessEnabled: false
+      EBSOptions:
+        EBSEnabled: true
+        VolumeSize: !Ref VolumeSizeGiB
+        VolumeType: gp3
+      VPCOptions:
+        SecurityGroupIds:
+          - !Ref OpenSearchSecurityGroup
+        SubnetIds:
+          - !Ref PrivateOpenSearchSubnet
+      EncryptionAtRestOptions:
+        Enabled: true
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+        TLSSecurityPolicy: Policy-Min-TLS-1-2-2019-07
+      AdvancedSecurityOptions:
+        Enabled: true
+        InternalUserDatabaseEnabled: true
+        MasterUserOptions:
+          MasterUserName: !Sub '{{resolve:secretsmanager:${DomainAdminCredentials}:SecretString:username}}'
+          MasterUserPassword: !Sub '{{resolve:secretsmanager:${DomainAdminCredentials}:SecretString:password}}'
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: es:ESHttp*
+            Resource: !Sub 'arn:${AWS::Partition}:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
+      SoftwareUpdateOptions:
+        AutoSoftwareUpdateEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Ref DomainName
+        - Key: Project
+          Value: playground-opensearch
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  GeneratorInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: ReadDomainAdminCredentials
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DomainAdminCredentials
+
+  GeneratorInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref GeneratorInstanceRole
+
+  GeneratorInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: ManagedOpenSearchDomain
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      InstanceType: !Ref ProducerInstanceType
+      IamInstanceProfile: !Ref GeneratorInstanceProfile
+      MetadataOptions:
+        HttpTokens: required
+        HttpEndpoint: enabled
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: true
+          GroupSet:
+            - !Ref GeneratorSecurityGroup
+          SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub '${DomainName}-event-generator'
+        - Key: Project
+          Value: playground-opensearch
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+
+          dnf install -y git nginx python3.11
+          install -d -o ec2-user -g ec2-user /opt/opensearch-generator
+          git clone --depth 1 --branch ${GeneratorRevision} ${GeneratorRepositoryUrl} /opt/opensearch-generator/repository
+          chown -R ec2-user:ec2-user /opt/opensearch-generator/repository
+
+          cat > /etc/nginx/conf.d/opensearch-dashboards.conf <<'EOF'
+          server {
+              listen 5601;
+              server_name _;
+              location / {
+                  proxy_pass https://${ManagedOpenSearchDomain.DomainEndpoint};
+                  proxy_set_header Host ${ManagedOpenSearchDomain.DomainEndpoint};
+                  proxy_ssl_server_name on;
+              }
+          }
+          EOF
+          rm -f /etc/nginx/conf.d/default.conf
+          systemctl enable --now nginx
+
+          cat > /opt/opensearch-generator/run-generator.sh <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          secret_json=$(aws secretsmanager get-secret-value --secret-id '${DomainAdminCredentials}' --region '${AWS::Region}' --query SecretString --output text)
+          export OPENSEARCH_USERNAME=$(printf '%s' "$secret_json" | /usr/bin/python3.11 -c 'import json, sys; print(json.load(sys.stdin)["username"])')
+          export OPENSEARCH_PASSWORD=$(printf '%s' "$secret_json" | /usr/bin/python3.11 -c 'import json, sys; print(json.load(sys.stdin)["password"])')
+          cd /opt/opensearch-generator/repository
+          curl --fail --silent --show-error --user "$OPENSEARCH_USERNAME:$OPENSEARCH_PASSWORD" --header 'Content-Type: application/json' --request PUT 'https://${ManagedOpenSearchDomain.DomainEndpoint}/_index_template/demo-ops-access-template' --data-binary @opensearch/index-templates/demo-ops-access.json
+          curl --fail --silent --show-error --user "$OPENSEARCH_USERNAME:$OPENSEARCH_PASSWORD" --header 'Content-Type: application/json' --request PUT 'https://${ManagedOpenSearchDomain.DomainEndpoint}/_ingest/pipeline/demo-ops-access-pipeline' --data-binary @opensearch/ingest-pipelines/demo-ops-access-pipeline.json
+          curl --fail --silent --show-error --user "$OPENSEARCH_USERNAME:$OPENSEARCH_PASSWORD" --header 'osd-xsrf: true' --header 'securitytenant: global' --form 'file=@opensearch/dashboards/demo-ops-dashboard.ndjson;type=application/ndjson' 'https://${ManagedOpenSearchDomain.DomainEndpoint}/_dashboards/api/saved_objects/_import?overwrite=true'
+          cd apps/event-generator
+          exec /usr/bin/python3.11 -m operational_event_generator.cli --endpoint 'https://${ManagedOpenSearchDomain.DomainEndpoint}' --continuous --batch-size 10 --interval-seconds 1
+          EOF
+          chmod 0755 /opt/opensearch-generator/run-generator.sh
+
+          cat > /etc/systemd/system/opensearch-event-generator.service <<'EOF'
+          [Unit]
+          Description=OpenSearch demo operational event generator
+          Wants=network-online.target
+          After=network-online.target nginx.service
+
+          [Service]
+          Type=simple
+          User=ec2-user
+          WorkingDirectory=/opt/opensearch-generator/repository/apps/event-generator
+          ExecStart=/opt/opensearch-generator/run-generator.sh
+          Restart=always
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          systemctl daemon-reload
+          systemctl enable --now opensearch-event-generator.service
+
+Outputs:
+  VpcId:
+    Description: VPC created for the private OpenSearch domain.
+    Value: !Ref DemoVpc
+  PublicSubnetId:
+    Description: Public subnet hosting the SSM-only generator EC2.
+    Value: !Ref PublicSubnet
+  PrivateOpenSearchSubnetId:
+    Description: Private subnet hosting the OpenSearch VPC endpoint.
+    Value: !Ref PrivateOpenSearchSubnet
+  DomainEndpoint:
+    Description: Private HTTPS endpoint for the managed OpenSearch REST API.
+    Value: !GetAtt ManagedOpenSearchDomain.DomainEndpoint
+  AdminCredentialsSecretArn:
+    Description: Secrets Manager ARN holding the OpenSearch internal admin username and password.
+    Value: !Ref DomainAdminCredentials
+  GeneratorInstanceId:
+    Description: SSM-only EC2 instance that runs the event generator and Dashboards proxy.
+    Value: !Ref GeneratorInstance
+  DashboardsSsmPortForwardCommand:
+    Description: Run locally, then browse to http://localhost:5601.
+    Value: !Sub 'aws ssm start-session --target ${GeneratorInstance} --document-name AWS-StartPortForwardingSession --parameters portNumber=5601,localPortNumber=5601 --region ${AWS::Region}'
