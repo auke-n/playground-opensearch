@@ -14,7 +14,7 @@
 - [~] Implement the Python event generator/API and bulk ingestion.
 - [x] Create dashboard objects and import/export workflow.
 - [x] Run the managed-domain event generator continuously on a minimal EC2 instance.
-- [~] Replace the public managed-domain deployment with a self-contained VPC-first stack (ADR-0004).
+- [~] Deploy and verify the self-contained public managed-domain stack with a dedicated generator VPC (ADR-0005).
 - [ ] Write the first learning walkthrough and operational runbooks.
 
 ## Next
