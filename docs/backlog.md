@@ -7,7 +7,7 @@
 
 ## Now
 
-- [~] Deploy and verify a managed Amazon OpenSearch Service domain.
+- [x] Deploy and verify a managed Amazon OpenSearch Service domain.
 - [ ] Define Terraform inputs and AWS network/access boundaries.
 - [ ] Scaffold the EC2 bootstrap and containerized OpenSearch stack.
 - [x] Define the operational-event schema, index template, and ingest pipeline.

@@ -50,3 +50,7 @@ The EC2 instance and EBS volume incur charges while the stack exists. When the e
 ```powershell
 aws cloudformation delete-stack --stack-name playground-opensearch-demo --profile borys --region eu-central-1
 ```
+
+## Managed Amazon OpenSearch Service variant
+
+`opensearch-managed.yaml` provisions a separate Amazon OpenSearch Service domain. It is the managed counterpart to the self-managed EC2 demo and requires an `AllowedClientCidr` deployment parameter. See `docs/runbooks/managed-domain-access.md` for authentication and access instructions.

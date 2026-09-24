@@ -16,7 +16,9 @@ Managed service deployment.
 - Indexed and verified four transformed operational access-log events in `demo-ops-access-000001`.
 - Implemented and unit-tested a dependency-free Python Bulk API event generator for live ingestion through an SSM tunnel.
 - Recorded the managed Amazon OpenSearch Service topology in ADR-0002 after the self-managed AWS stack was removed.
+- Deployed `playground-opensearch-managed` and verified a green Amazon OpenSearch Service domain.
+- Applied the operational access-log template and pipeline to the managed domain and verified four indexed events, including a parsed failure event.
 
 ## Next decision
 
-Deploy and verify the managed Amazon OpenSearch Service domain, then adapt the generator for authenticated HTTPS ingestion.
+Run the Python generator against the managed domain and create the first OpenSearch Dashboards visualizations.
