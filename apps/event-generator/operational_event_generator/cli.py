@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from time import sleep
 
 from .events import AccessEventFactory
@@ -19,6 +20,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interval-seconds", type=float, default=1.0, help="Delay between batches in continuous mode.")
     parser.add_argument("--continuous", action="store_true", help="Generate batches until interrupted with Ctrl+C.")
     parser.add_argument("--seed", type=int, default=None, help="Optional seed for reproducible event sequences.")
+    parser.add_argument(
+        "--username",
+        default=os.getenv("OPENSEARCH_USERNAME"),
+        help="Basic-auth user. Defaults to the OPENSEARCH_USERNAME environment variable.",
+    )
+    parser.add_argument(
+        "--password-env",
+        default="OPENSEARCH_PASSWORD",
+        help="Name of the environment variable containing the basic-auth password.",
+    )
     arguments = parser.parse_args()
     if arguments.count < 1 or arguments.batch_size < 1 or arguments.interval_seconds < 0:
         parser.error("count and batch-size must be positive; interval-seconds cannot be negative")
@@ -29,7 +40,12 @@ def main() -> None:
     """Generate batches and send them to OpenSearch until complete or interrupted."""
     arguments = parse_args()
     factory = AccessEventFactory(seed=arguments.seed)
-    client = OpenSearchBulkClient(endpoint=arguments.endpoint, index=arguments.index)
+    client = OpenSearchBulkClient(
+        endpoint=arguments.endpoint,
+        index=arguments.index,
+        username=arguments.username,
+        password=os.getenv(arguments.password_env),
+    )
     indexed_total = 0
     try:
         while arguments.continuous or indexed_total < arguments.count:

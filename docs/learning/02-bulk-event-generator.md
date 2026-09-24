@@ -38,3 +38,7 @@ In Dashboards Discover, use the `demo-ops-access*` data view and set the time ra
 - The client sends raw text only; the index default pipeline performs parsing centrally.
 - Index failures are surfaced per item in the Bulk API response.
 - The client retries transient transport failures with exponential backoff.
+
+## Managed domain variant
+
+For Amazon OpenSearch Service, retrieve the generated internal admin credentials as documented in `docs/runbooks/managed-domain-access.md`. Set `OPENSEARCH_USERNAME` and `OPENSEARCH_PASSWORD`, then replace the default endpoint with the `https://` domain endpoint. The generator automatically sends HTTP Basic Authentication when both variables are set.

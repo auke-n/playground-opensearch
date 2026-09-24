@@ -2,7 +2,7 @@
 
 ## Current phase
 
-Foundation and ingestion.
+Managed service deployment.
 
 ## Completed
 
@@ -15,7 +15,8 @@ Foundation and ingestion.
 - Added and deployed the `demo-ops-access` index template and `demo-ops-access-pipeline` ingest pipeline.
 - Indexed and verified four transformed operational access-log events in `demo-ops-access-000001`.
 - Implemented and unit-tested a dependency-free Python Bulk API event generator for live ingestion through an SSM tunnel.
+- Recorded the managed Amazon OpenSearch Service topology in ADR-0002 after the self-managed AWS stack was removed.
 
 ## Next decision
 
-Run the Python generator through the local OpenSearch SSM tunnel and create the first OpenSearch Dashboards visualizations.
+Deploy and verify the managed Amazon OpenSearch Service domain, then adapt the generator for authenticated HTTPS ingestion.

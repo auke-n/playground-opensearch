@@ -33,6 +33,10 @@ The demo domain is operational event analytics: generated web-service logs and d
 
 The first environment is a single-node OpenSearch cluster on an ARM-based `t4g.small` EC2 instance. OpenSearch and OpenSearch Dashboards are containerized; operator access uses AWS Systems Manager port forwarding rather than public service ports. See ADR-0001.
 
+## Managed service decision
+
+The self-managed EC2 environment was removed after validating the approach. The next environment is a separate Amazon OpenSearch Service domain, documented in ADR-0002. Both implementation paths remain version-controlled for comparison.
+
 ## Open questions
 
 - Which AWS region and allowed administrator IP/CIDR should be used for the EC2 security group?

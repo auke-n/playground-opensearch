@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Cost-conscious Amazon OpenSearch Service domain for learning. This is a
+  single-node public-access demo, not a production topology.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: playground-os-managed
+    AllowedPattern: '^[a-z][a-z0-9-]{2,27}$'
+    ConstraintDescription: Use 3-28 lowercase letters, digits, and hyphens, starting with a letter.
+  EngineVersion:
+    Type: String
+    Default: OpenSearch_2.19
+  InstanceType:
+    Type: String
+    Default: t3.small.search
+    AllowedValues:
+      - t3.small.search
+    Description: The smallest OpenSearch Service instance available for this demo in eu-central-1.
+  VolumeSizeGiB:
+    Type: Number
+    Default: 10
+    MinValue: 10
+    MaxValue: 100
+    Description: Encrypted gp3 EBS storage. 10 GiB is the service minimum for this demo.
+  AllowedClientCidr:
+    Type: String
+    AllowedPattern: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}/(?:[0-9]|[12][0-9]|3[0-2])$'
+    ConstraintDescription: Provide one IPv4 CIDR, for example 203.0.113.10/32.
+    Description: The only public network range permitted to reach the domain endpoint.
+
+Resources:
+  DomainAdminCredentials:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Internal master-user credentials for the managed OpenSearch learning domain.
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Project
+          Value: playground-opensearch
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  ManagedOpenSearchDomain:
+    Type: AWS::OpenSearchService::Domain
+    Properties:
+      DomainName: !Ref DomainName
+      EngineVersion: !Ref EngineVersion
+      ClusterConfig:
+        DedicatedMasterEnabled: false
+        InstanceCount: 1
+        InstanceType: !Ref InstanceType
+        ZoneAwarenessEnabled: false
+      EBSOptions:
+        EBSEnabled: true
+        VolumeSize: !Ref VolumeSizeGiB
+        VolumeType: gp3
+      EncryptionAtRestOptions:
+        Enabled: true
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+        TLSSecurityPolicy: Policy-Min-TLS-1-2-2019-07
+      AdvancedSecurityOptions:
+        Enabled: true
+        InternalUserDatabaseEnabled: true
+        MasterUserOptions:
+          MasterUserName: !Sub '{{resolve:secretsmanager:${DomainAdminCredentials}:SecretString:username}}'
+          MasterUserPassword: !Sub '{{resolve:secretsmanager:${DomainAdminCredentials}:SecretString:password}}'
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: es:ESHttp*
+            Resource: !Sub 'arn:${AWS::Partition}:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
+            Condition:
+              IpAddress:
+                aws:SourceIp: !Ref AllowedClientCidr
+      SoftwareUpdateOptions:
+        AutoSoftwareUpdateEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Ref DomainName
+        - Key: Project
+          Value: playground-opensearch
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  DomainEndpoint:
+    Description: HTTPS endpoint for the managed OpenSearch REST API.
+    Value: !GetAtt ManagedOpenSearchDomain.DomainEndpoint
+  DashboardsUrl:
+    Description: Managed OpenSearch Dashboards URL. Sign in with the generated internal admin credentials.
+    Value: !Sub 'https://${ManagedOpenSearchDomain.DomainEndpoint}/_dashboards/'
+  AdminCredentialsSecretArn:
+    Description: Secrets Manager ARN holding the OpenSearch internal admin username and password.
+    Value: !Ref DomainAdminCredentials

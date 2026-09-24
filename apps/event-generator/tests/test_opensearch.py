@@ -13,3 +13,7 @@ class OpenSearchBulkClientTests(unittest.TestCase):
         self.assertEqual(4, len(payload))
         self.assertEqual("demo-ops-access-000001", json.loads(payload[0])["index"]["_index"])
         self.assertEqual({"message": "first"}, json.loads(payload[1]))
+
+    def test_basic_authentication_requires_both_credential_parts(self) -> None:
+        with self.assertRaises(ValueError):
+            OpenSearchBulkClient(endpoint="http://localhost:9200", index="demo", username="admin")

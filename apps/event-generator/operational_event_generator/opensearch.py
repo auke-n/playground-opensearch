@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from base64 import b64encode
 from dataclasses import dataclass
 from time import sleep
 from typing import Any
@@ -25,10 +26,23 @@ class BulkResult:
 class OpenSearchBulkClient:
     """Send document batches to a single OpenSearch endpoint."""
 
-    def __init__(self, endpoint: str, index: str, retries: int = 3) -> None:
+    def __init__(
+        self,
+        endpoint: str,
+        index: str,
+        retries: int = 3,
+        username: str | None = None,
+        password: str | None = None,
+    ) -> None:
         self._endpoint = endpoint.rstrip("/")
         self._index = index
         self._retries = retries
+        if bool(username) != bool(password):
+            raise ValueError("OpenSearch basic authentication requires both username and password.")
+        self._authorization = None
+        if username and password:
+            encoded_credentials = b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+            self._authorization = f"Basic {encoded_credentials}"
 
     def index_documents(self, documents: list[dict[str, object]]) -> BulkResult:
         """Index documents with the configured index default pipeline."""
@@ -50,10 +64,13 @@ class OpenSearchBulkClient:
         return ("\n".join(lines) + "\n").encode("utf-8")
 
     def _request_with_retries(self, payload: bytes) -> dict[str, Any]:
+        headers = {"Content-Type": "application/x-ndjson"}
+        if self._authorization:
+            headers["Authorization"] = self._authorization
         request = Request(
             url=f"{self._endpoint}/_bulk",
             data=payload,
-            headers={"Content-Type": "application/x-ndjson"},
+            headers=headers,
             method="POST",
         )
         for attempt in range(self._retries + 1):
