@@ -18,7 +18,8 @@ Managed service deployment.
 - Recorded the managed Amazon OpenSearch Service topology in ADR-0002 after the self-managed AWS stack was removed.
 - Deployed `playground-opensearch-managed` and verified a green Amazon OpenSearch Service domain.
 - Applied the operational access-log template and pipeline to the managed domain and verified four indexed events, including a parsed failure event.
+- Imported and verified a version-controlled managed Dashboards overview with four visualization panels in the global tenant.
 
 ## Next decision
 
-Run the Python generator against the managed domain and create the first OpenSearch Dashboards visualizations.
+Run the Python generator against the managed domain and explore dashboard queries, aggregations, and filters.

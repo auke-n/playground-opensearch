@@ -12,7 +12,7 @@
 - [ ] Scaffold the EC2 bootstrap and containerized OpenSearch stack.
 - [x] Define the operational-event schema, index template, and ingest pipeline.
 - [~] Implement the Python event generator/API and bulk ingestion.
-- [ ] Create dashboard objects and import/export workflow.
+- [x] Create dashboard objects and import/export workflow.
 - [ ] Write the first learning walkthrough and operational runbooks.
 
 ## Next
