@@ -13,6 +13,7 @@
 - [x] Define the operational-event schema, index template, and ingest pipeline.
 - [~] Implement the Python event generator/API and bulk ingestion.
 - [x] Create dashboard objects and import/export workflow.
+- [x] Run the managed-domain event generator continuously on a minimal EC2 instance.
 - [ ] Write the first learning walkthrough and operational runbooks.
 
 ## Next
