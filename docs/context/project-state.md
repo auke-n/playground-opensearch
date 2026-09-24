@@ -20,6 +20,7 @@ Managed service deployment.
 - Applied the operational access-log template and pipeline to the managed domain and verified four indexed events, including a parsed failure event.
 - Imported and verified a version-controlled managed Dashboards overview with four visualization panels in the global tenant.
 - Ran the Python Bulk generator against the managed domain and verified 100 current events in the last 15-minute window.
+- Updated the managed domain access policy to support authenticated Dashboards data proxying; verified field discovery against the real index mapping.
 
 ## Next decision
 

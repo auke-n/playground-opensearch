@@ -24,11 +24,6 @@ Parameters:
     MinValue: 10
     MaxValue: 100
     Description: Encrypted gp3 EBS storage. 10 GiB is the service minimum for this demo.
-  AllowedClientCidr:
-    Type: String
-    AllowedPattern: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}/(?:[0-9]|[12][0-9]|3[0-2])$'
-    ConstraintDescription: Provide one IPv4 CIDR, for example 203.0.113.10/32.
-    Description: The only public network range permitted to reach the domain endpoint.
 
 Resources:
   DomainAdminCredentials:
@@ -80,9 +75,6 @@ Resources:
             Principal: '*'
             Action: es:ESHttp*
             Resource: !Sub 'arn:${AWS::Partition}:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
-            Condition:
-              IpAddress:
-                aws:SourceIp: !Ref AllowedClientCidr
       SoftwareUpdateOptions:
         AutoSoftwareUpdateEnabled: true
       Tags:

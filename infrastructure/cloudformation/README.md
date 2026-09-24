@@ -53,4 +53,4 @@ aws cloudformation delete-stack --stack-name playground-opensearch-demo --profil
 
 ## Managed Amazon OpenSearch Service variant
 
-`opensearch-managed.yaml` provisions a separate Amazon OpenSearch Service domain. It is the managed counterpart to the self-managed EC2 demo and requires an `AllowedClientCidr` deployment parameter. See `docs/runbooks/managed-domain-access.md` for authentication and access instructions.
+`opensearch-managed.yaml` provisions a separate Amazon OpenSearch Service domain. It is the managed counterpart to the self-managed EC2 demo. Its public endpoint relies on HTTPS and fine-grained access control so managed Dashboards can proxy authenticated data requests. See `docs/runbooks/managed-domain-access.md` for access instructions.

@@ -27,6 +27,6 @@ cd apps/event-generator
 py -3 -m operational_event_generator.cli --endpoint https://<domain-endpoint> --continuous --batch-size 10 --interval-seconds 1
 ```
 
-## Client IP changes
+## Security scope
 
-The domain allows only the CIDR passed as `AllowedClientCidr`. If the public egress IP changes, update the CloudFormation stack with the new `/32` CIDR before attempting to connect.
+The domain endpoint is public so that managed Dashboards can proxy data requests. HTTPS and fine-grained access control remain enabled. Do not share the generated credentials, and delete this short-lived learning environment when it is no longer needed.
