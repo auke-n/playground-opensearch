@@ -21,7 +21,8 @@ Managed service deployment.
 - Imported and verified a version-controlled managed Dashboards overview with four visualization panels in the global tenant.
 - Ran the Python Bulk generator against the managed domain and verified 100 current events in the last 15-minute window.
 - Updated the managed domain access policy to support authenticated Dashboards data proxying; verified field discovery against the real index mapping.
+- Corrected the dashboard visualization-to-data-view binding and verified each visualization has exactly one reference to `demo-ops-access` after import.
 
 ## Next decision
 
-Run the Python generator against the managed domain and explore dashboard queries, aggregations, and filters.
+Refresh the managed dashboard, then explore dashboard queries, aggregations, and filters while the Python generator is running.
