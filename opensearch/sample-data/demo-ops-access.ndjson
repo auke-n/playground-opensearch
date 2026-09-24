@@ -1,0 +1,4 @@
+{"message":"203.0.113.10 - alice [24/Sep/2026:08:00:01 +0000] \"GET /api/orders HTTP/1.1\" 200 1524 \"-\" \"Mozilla/5.0\" 42.7","service":{"name":"orders-api"}}
+{"message":"203.0.113.11 - bob [24/Sep/2026:08:00:04 +0000] \"POST /api/orders HTTP/1.1\" 201 382 \"https://demo.example/orders\" \"Mozilla/5.0\" 187.2","service":{"name":"orders-api"}}
+{"message":"198.51.100.42 - - [24/Sep/2026:08:00:09 +0000] \"GET /api/catalog/42 HTTP/1.1\" 500 97 \"-\" \"curl/8.7.1\" 912.5","service":{"name":"catalog-api"}}
+{"message":"203.0.113.10 - alice [24/Sep/2026:08:00:14 +0000] \"GET /health HTTP/1.1\" 200 15 \"-\" \"kube-probe/1.30\" 2.1","service":{"name":"orders-api"}}

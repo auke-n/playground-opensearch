@@ -1,0 +1,74 @@
+{
+  "index_patterns": ["demo-ops-access-*"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.default_pipeline": "demo-ops-access-pipeline"
+    },
+    "aliases": {
+      "demo-ops-access": {}
+    },
+    "mappings": {
+      "dynamic": true,
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "message": { "type": "text" },
+        "client": {
+          "properties": {
+            "ip": { "type": "ip" }
+          }
+        },
+        "event": {
+          "properties": {
+            "category": { "type": "keyword" },
+            "dataset": { "type": "keyword" },
+            "duration": { "type": "long" },
+            "kind": { "type": "keyword" },
+            "outcome": { "type": "keyword" },
+            "type": { "type": "keyword" }
+          }
+        },
+        "http": {
+          "properties": {
+            "request": {
+              "properties": {
+                "method": { "type": "keyword" },
+                "referrer": { "type": "keyword", "ignore_above": 2048 }
+              }
+            },
+            "response": {
+              "properties": {
+                "body": {
+                  "properties": {
+                    "bytes": { "type": "long" }
+                  }
+                },
+                "status_code": { "type": "integer" }
+              }
+            },
+            "version": { "type": "keyword" }
+          }
+        },
+        "service": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "response_time_ms": { "type": "float" }
+          }
+        },
+        "url": {
+          "properties": {
+            "original": { "type": "keyword", "ignore_above": 2048 },
+            "path": { "type": "keyword" }
+          }
+        },
+        "user_agent": {
+          "properties": {
+            "original": { "type": "keyword", "ignore_above": 2048 }
+          }
+        }
+      }
+    }
+  }
+}

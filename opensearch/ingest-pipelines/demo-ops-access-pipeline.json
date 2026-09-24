@@ -1,0 +1,62 @@
+{
+  "description": "Parse the demo web access-log format into searchable operational fields.",
+  "processors": [
+    {
+      "grok": {
+        "field": "message",
+        "patterns": [
+          "%{IP:client.ip} - %{DATA:user.name} \\[%{HTTPDATE:raw.timestamp}\\] \\\"%{WORD:http.request.method} %{DATA:url.original} HTTP/%{NUMBER:http.version}\\\" %{NUMBER:http.response.status_code:int} %{NUMBER:http.response.body.bytes:long} \\\"%{DATA:http.request.referrer}\\\" \\\"%{DATA:user_agent.original}\\\" %{NUMBER:service.response_time_ms:float}"
+        ]
+      }
+    },
+    {
+      "date": {
+        "field": "raw.timestamp",
+        "target_field": "@timestamp",
+        "formats": ["dd/MMM/yyyy:HH:mm:ss Z"]
+      }
+    },
+    {
+      "script": {
+        "description": "Convert millisecond latency to ECS-style event duration in nanoseconds.",
+        "source": "ctx.event = ctx.event != null ? ctx.event : new HashMap(); ctx.event.duration = (long) Math.round(Double.parseDouble(ctx.service.response_time_ms.toString()) * 1000000d); ctx.event.outcome = ctx.http.response.status_code >= 500 ? 'failure' : 'success';"
+      }
+    },
+    {
+      "set": {
+        "field": "event.category",
+        "value": "web"
+      }
+    },
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "demo.access"
+      }
+    },
+    {
+      "set": {
+        "field": "event.kind",
+        "value": "event"
+      }
+    },
+    {
+      "set": {
+        "field": "event.type",
+        "value": "access"
+      }
+    },
+    {
+      "rename": {
+        "field": "url.original",
+        "target_field": "url.path"
+      }
+    },
+    {
+      "remove": {
+        "field": "raw",
+        "ignore_missing": true
+      }
+    }
+  ]
+}

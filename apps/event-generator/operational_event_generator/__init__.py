@@ -1,0 +1,1 @@
+"""Operational event generator package."""

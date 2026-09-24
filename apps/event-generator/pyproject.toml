@@ -1,0 +1,11 @@
+[project]
+name = "operational-event-generator"
+version = "0.1.0"
+description = "Generate raw operational access logs and ingest them through the OpenSearch Bulk API."
+requires-python = ">=3.11"
+
+[project.scripts]
+generate-operational-events = "operational_event_generator.cli:main"
+
+[tool.unittest]
+start-directory = "tests"

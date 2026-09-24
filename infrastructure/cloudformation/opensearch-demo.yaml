@@ -1,0 +1,241 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Cost-conscious, single-node OpenSearch demo on one EC2 instance. This stack is
+  for learning only; it is not a production-ready OpenSearch deployment.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t4g.small
+    AllowedValues:
+      - t4g.small
+    Description: Smallest Graviton instance with 2 GiB memory. Do not use a 1 GiB instance for OpenSearch.
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+    Description: Current Amazon Linux 2023 ARM64 AMI from AWS Systems Manager Parameter Store.
+  OpenSearchVersion:
+    Type: String
+    Default: 2.19.1
+    AllowedPattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+    ConstraintDescription: Use a semantic OpenSearch image version, for example 2.19.1.
+  OpenSearchInitialAdminPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Required by the OpenSearch 2.12+ container bootstrap even when demo security is disabled. Do not commit this value.
+  RootVolumeSizeGiB:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 100
+    Description: Encrypted gp3 root volume size. 20 GiB is sufficient for a short-lived demo.
+
+Resources:
+  DemoVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-igw'
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref DemoVpc
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DemoVpc
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.42.1.0/24
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref DemoVpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet'
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: No inbound access. Use AWS Systems Manager port forwarding for the demo.
+      SecurityGroupEgress:
+        - Description: Required for SSM and bootstrap package/image downloads.
+          IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref DemoVpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-instance-sg'
+
+  SsmInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ssm-role'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SsmInstanceRole
+
+  OpenSearchInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      SubnetId: !Ref PublicSubnet
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: !Ref RootVolumeSizeGiB
+            VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-opensearch'
+        - Key: Project
+          Value: playground-opensearch
+        - Key: ManagedBy
+          Value: CloudFormation
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+
+          dnf update -y
+          # Amazon Linux 2023 includes curl-minimal; installing full curl conflicts with it.
+          dnf install -y docker
+          systemctl enable --now docker
+
+          # OpenSearch requires this kernel setting. Swap makes the constrained 2 GiB demo host less prone to OOM.
+          echo 'vm.max_map_count=262144' > /etc/sysctl.d/99-opensearch.conf
+          sysctl --system
+          fallocate -l 2G /swapfile
+          chmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+          echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+
+          install -d -m 0755 /opt/opensearch
+          curl --fail --silent --show-error --location \
+            https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-aarch64 \
+            --output /usr/local/bin/docker-compose
+          chmod 0755 /usr/local/bin/docker-compose
+          ln -sf /usr/local/bin/docker-compose /usr/local/bin/docker-compose-plugin
+
+          cat > /opt/opensearch/docker-compose.yml <<'COMPOSE'
+          services:
+            opensearch:
+              image: opensearchproject/opensearch:${OpenSearchVersion}
+              container_name: opensearch
+              restart: unless-stopped
+              environment:
+                - discovery.type=single-node
+                - bootstrap.memory_lock=false
+                - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+                - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OpenSearchInitialAdminPassword}
+                # The service is reachable only from this host through SSM port forwarding.
+                - plugins.security.disabled=true
+              ulimits:
+                memlock:
+                  soft: -1
+                  hard: -1
+              ports:
+                - 127.0.0.1:9200:9200
+              volumes:
+                - opensearch-data:/usr/share/opensearch/data
+            dashboards:
+              image: opensearchproject/opensearch-dashboards:${OpenSearchVersion}
+              container_name: opensearch-dashboards
+              restart: unless-stopped
+              depends_on:
+                - opensearch
+              environment:
+                - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
+                - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+              ports:
+                - 127.0.0.1:5601:5601
+          volumes:
+            opensearch-data:
+          COMPOSE
+
+          cat > /etc/systemd/system/opensearch-demo.service <<'SERVICE'
+          [Unit]
+          Description=OpenSearch demo containers
+          Requires=docker.service
+          After=docker.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory=/opt/opensearch
+          ExecStart=/usr/local/bin/docker-compose up -d
+          ExecStop=/usr/local/bin/docker-compose down
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+
+          systemctl daemon-reload
+          systemctl enable --now opensearch-demo.service
+
+Outputs:
+  InstanceId:
+    Description: EC2 instance hosting the single-node OpenSearch cluster.
+    Value: !Ref OpenSearchInstance
+  DashboardPortForwardCommand:
+    Description: Run locally after the instance is managed by SSM, then open http://localhost:5601.
+    Value: !Sub >-
+      aws ssm start-session --target ${OpenSearchInstance} --document-name AWS-StartPortForwardingSession
+      --parameters '{"portNumber":["5601"],"localPortNumber":["5601"]}' --region ${AWS::Region} --profile borys
+  OpenSearchPortForwardCommand:
+    Description: Run locally to access the OpenSearch REST API at http://localhost:9200.
+    Value: !Sub >-
+      aws ssm start-session --target ${OpenSearchInstance} --document-name AWS-StartPortForwardingSession
+      --parameters '{"portNumber":["9200"],"localPortNumber":["9200"]}' --region ${AWS::Region} --profile borys
