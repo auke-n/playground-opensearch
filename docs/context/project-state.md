@@ -19,6 +19,7 @@ Managed service deployment.
 - Deployed `playground-opensearch-managed` and verified a green Amazon OpenSearch Service domain.
 - Applied the operational access-log template and pipeline to the managed domain and verified four indexed events, including a parsed failure event.
 - Imported and verified a version-controlled managed Dashboards overview with four visualization panels in the global tenant.
+- Ran the Python Bulk generator against the managed domain and verified 100 current events in the last 15-minute window.
 
 ## Next decision
 
